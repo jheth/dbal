@@ -6,9 +6,54 @@ use Doctrine\DBAL\Platforms\OraclePlatform;
 use Doctrine\DBAL\Types\Type;
 
 require_once __DIR__ . '/../../TestInit.php';
- 
+
 class OraclePlatformTest extends AbstractPlatformTestCase
 {
+    static public function dataValidIdentifiers()
+    {
+        return array(
+            array('a'),
+            array('foo'),
+            array('Foo'),
+            array('Foo123'),
+            array('Foo#bar_baz$'),
+            array('"a"'),
+            array('"1"'),
+            array('"foo_bar"'),
+            array('"@$%&!"'),
+        );
+    }
+
+    /**
+     * @dataProvider dataValidIdentifiers
+     */
+    public function testValidIdentifiers($identifier)
+    {
+        $platform = $this->createPlatform();
+        $platform->assertValidIdentifier($identifier);
+    }
+
+    static public function dataInvalidIdentifiers()
+    {
+        return array(
+            array('1'),
+            array('abc&'),
+            array('abc-def'),
+            array('"'),
+            array('"foo"bar"'),
+        );
+    }
+
+    /**
+     * @dataProvider dataInvalidIdentifiers
+     */
+    public function testInvalidIdentifiers($identifier)
+    {
+        $this->setExpectedException('Doctrine\DBAL\DBALException');
+        $platform = $this->createPlatform();
+        $platform->assertValidIdentifier($identifier);
+    }
+
     public function createPlatform()
     {
         return new OraclePlatform;
@@ -31,7 +76,7 @@ class OraclePlatformTest extends AbstractPlatformTestCase
     {
         return array(
             'ALTER TABLE mytable ADD (quota NUMBER(10) DEFAULT NULL)',
-            "ALTER TABLE mytable MODIFY (baz  VARCHAR2(255) DEFAULT 'def' NOT NULL)",
+            "ALTER TABLE mytable MODIFY (baz  VARCHAR2(255) DEFAULT 'def' NOT NULL, bloo  NUMBER(1) DEFAULT '0' NOT NULL)",
             "ALTER TABLE mytable DROP (foo)",
             "ALTER TABLE mytable RENAME TO userlist",
         );
@@ -94,7 +139,7 @@ class OraclePlatformTest extends AbstractPlatformTestCase
 
     public function testDropTable()
     {
-        $this->assertEquals('DROP TABLE foobar', $this->_platform->getDropTableSQL('foobar'));        
+        $this->assertEquals('DROP TABLE foobar', $this->_platform->getDropTableSQL('foobar'));
     }
 
     public function testGeneratesTypeDeclarationForIntegers()
@@ -145,9 +190,9 @@ class OraclePlatformTest extends AbstractPlatformTestCase
 
     public function testSupportsSavePoints()
     {
-        $this->assertTrue($this->_platform->supportsSavepoints());   
+        $this->assertTrue($this->_platform->supportsSavepoints());
     }
-    
+
     public function getGenerateIndexSql()
     {
         return 'CREATE INDEX my_idx ON mytable (user_name, last_login)';
@@ -195,6 +240,14 @@ class OraclePlatformTest extends AbstractPlatformTestCase
         );
     }
 
+    public function getCreateTableColumnTypeCommentsSQL()
+    {
+        return array(
+            "CREATE TABLE test (id NUMBER(10) NOT NULL, data CLOB NOT NULL, PRIMARY KEY(id))",
+            "COMMENT ON COLUMN test.data IS '(DC2Type:array)'"
+        );
+    }
+
     public function getAlterTableColumnCommentsSQL()
     {
         return array(
@@ -203,5 +256,17 @@ class OraclePlatformTest extends AbstractPlatformTestCase
             "COMMENT ON COLUMN mytable.quota IS 'A comment'",
             "COMMENT ON COLUMN mytable.baz IS 'B comment'",
         );
+    }
+
+    public function getBitAndComparisonExpressionSql($value1, $value2)
+    {
+        return 'BITAND('.$value1 . ', ' . $value2 . ')';
+    }
+
+    public function getBitOrComparisonExpressionSql($value1, $value2)
+    {
+        return '(' . $value1 . '-' .
+                $this->getBitAndComparisonExpressionSql($value1, $value2)
+                . '+' . $value2 . ')';
     }
 }

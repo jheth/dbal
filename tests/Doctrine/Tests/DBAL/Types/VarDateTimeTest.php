@@ -27,7 +27,7 @@ class VarDateTimeTest extends \Doctrine\Tests\DbalTestCase
         $date = new \DateTime('1985-09-01 10:10:10');
 
         $expected = $date->format($this->_platform->getDateTimeTzFormatString());
-        $actual = is_string($this->_type->convertToDatabaseValue($date, $this->_platform));
+        $actual = $this->_type->convertToDatabaseValue($date, $this->_platform);
 
         $this->assertEquals($expected, $actual);
     }
@@ -58,5 +58,11 @@ class VarDateTimeTest extends \Doctrine\Tests\DbalTestCase
     public function testNullConversion()
     {
         $this->assertNull($this->_type->convertToPHPValue(null, $this->_platform));
+    }
+
+    public function testConvertDateTimeToPHPValue()
+    {
+        $date = new \DateTime("now");
+        $this->assertSame($date, $this->_type->convertToPHPValue($date, $this->_platform));
     }
 }

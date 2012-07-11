@@ -3,25 +3,25 @@
 namespace Doctrine\Tests\DBAL;
 
 require_once __DIR__ . '/../../../TestInit.php';
- 
+
 class OCI8StatementTest extends \Doctrine\Tests\DbalTestCase
 {
-
-    protected function getMockOCI8Statement()
+    public function setUp()
     {
-        $dbh = null;
-        $statement = "update table set field1 = ?, field2 = ? where field3 = ?";
-        $executeMode = OCI_COMMIT_ON_SUCCESS;
+        if (!extension_loaded('oci8')) {
+            $this->markTestSkipped('oci8 is not installed.');
+        }
 
-        return $this->getMock('\Doctrine\DBAL\Driver\OCI8\OCI8Statement', 
-		    array('bindValue', 'errorInfo'),
-            array(null, $statement, $executeMode), '', false);
+        parent::setUp();
     }
 
     /**
      * This scenario shows that when the first parameter is not null
      * it properly sets $hasZeroIndex to 1 and calls bindValue starting at 1.
-     * 
+     *
+     * This also verifies that the statement will check with the connection to
+     * see what the current execution mode is.
+     *
      * The expected exception is due to oci_execute failing due to no valid connection.
      *
      * @dataProvider executeDataProvider
@@ -29,7 +29,9 @@ class OCI8StatementTest extends \Doctrine\Tests\DbalTestCase
      */
     public function testExecute(array $params)
     {
-        $statement = $this->getMockOCI8Statement();
+        $statement = $this->getMock('\Doctrine\DBAL\Driver\OCI8\OCI8Statement',
+            array('bindValue', 'errorInfo'),
+            array(), '', false);
 
         $statement->expects($this->at(0))
             ->method('bindValue')
@@ -49,6 +51,16 @@ class OCI8StatementTest extends \Doctrine\Tests\DbalTestCase
                 $this->equalTo(3),
                 $this->equalTo($params[2])
           );
+
+        // can't pass to constructor since we don't have a real database handle,
+        // but execute must check the connection for the executeMode
+        $conn = $this->getMock('\Doctrine\DBAL\Driver\OCI8\OCI8Connection', array('getExecuteMode'), array(), '', false);
+        $conn->expects($this->once())
+            ->method('getExecuteMode');
+
+        $reflProperty = new \ReflectionProperty($statement, '_conn');
+        $reflProperty->setAccessible(true);
+        $reflProperty->setValue($statement, $conn);
 
         $statement->execute($params);
     }

@@ -2,22 +2,19 @@
 
 namespace Doctrine\Tests\DBAL\Platforms;
 
-use Doctrine\DBAL\Platforms\MsSqlPlatform;
+use Doctrine\DBAL\Platforms\SQLServer2008Platform;
 use Doctrine\DBAL\Types\Type;
 
-require_once __DIR__ . '/../../TestInit.php';
-
-class MsSqlPlatformTest extends AbstractPlatformTestCase
+class SQLServerPlatformTest extends AbstractPlatformTestCase
 {
-
     public function createPlatform()
     {
-        return new MsSqlPlatform;
+        return new SQLServer2008Platform;
     }
 
     public function getGenerateTableSql()
     {
-        return 'CREATE TABLE test (id INT IDENTITY NOT NULL, test NVARCHAR(255) DEFAULT NULL, PRIMARY KEY(id))';
+        return 'CREATE TABLE test (id INT IDENTITY NOT NULL, test NVARCHAR(255) DEFAULT NULL, PRIMARY KEY (id))';
     }
 
     public function getGenerateTableWithMultiColumnUniqueIndexSql()
@@ -34,7 +31,8 @@ class MsSqlPlatformTest extends AbstractPlatformTestCase
             'ALTER TABLE mytable RENAME TO userlist',
             'ALTER TABLE mytable ADD quota INT DEFAULT NULL',
             'ALTER TABLE mytable DROP COLUMN foo',
-            'ALTER TABLE mytable CHANGE bar baz NVARCHAR(255) DEFAULT \'def\' NOT NULL',
+            'ALTER TABLE mytable ALTER COLUMN baz NVARCHAR(255) DEFAULT \'def\' NOT NULL',
+            'ALTER TABLE mytable ALTER COLUMN bloo BIT DEFAULT \'0\' NOT NULL',
         );
     }
 
@@ -156,7 +154,7 @@ class MsSqlPlatformTest extends AbstractPlatformTestCase
     public function testModifyLimitQueryWithOffset()
     {
         $sql = $this->_platform->modifyLimitQuery('SELECT * FROM user ORDER BY username DESC', 10, 5);
-        $this->assertEquals('WITH outer_tbl AS (SELECT ROW_NUMBER() OVER (ORDER BY username DESC) AS "doctrine_rownum", * FROM (SELECT * FROM user) AS inner_tbl) SELECT * FROM outer_tbl WHERE "doctrine_rownum" BETWEEN 6 AND 15', $sql);
+        $this->assertEquals('SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY username DESC) AS doctrine_rownum, * FROM user) AS doctrine_tbl WHERE doctrine_rownum BETWEEN 6 AND 15', $sql);
     }
 
     public function testModifyLimitQueryWithAscOrderBy()
@@ -171,8 +169,56 @@ class MsSqlPlatformTest extends AbstractPlatformTestCase
         $this->assertEquals('SELECT TOP 10 * FROM user ORDER BY username DESC', $sql);
     }
 
+    /**
+     * @group DDC-1360
+     */
     public function testQuoteIdentifier()
     {
         $this->assertEquals('[fo][o]', $this->_platform->quoteIdentifier('fo]o'));
+        $this->assertEquals('[test]', $this->_platform->quoteIdentifier('test'));
+        $this->assertEquals('[test].[test]', $this->_platform->quoteIdentifier('test.test'));
+    }
+
+    /**
+     * @group DDC-1360
+     */
+    public function testQuoteSingleIdentifier()
+    {
+        $this->assertEquals('[fo][o]', $this->_platform->quoteSingleIdentifier('fo]o'));
+        $this->assertEquals('[test]', $this->_platform->quoteSingleIdentifier('test'));
+        $this->assertEquals('[test.test]', $this->_platform->quoteSingleIdentifier('test.test'));
+    }
+
+    /**
+     * @group DBAL-220
+     */
+    public function testCreateClusteredIndex()
+    {
+        $idx = new \Doctrine\DBAL\Schema\Index('idx', array('id'));
+        $idx->addFlag('clustered');
+        $this->assertEquals('CREATE CLUSTERED INDEX idx ON tbl (id)', $this->_platform->getCreateIndexSQL($idx, 'tbl'));
+    }
+
+    /**
+     * @group DBAL-220
+     */
+    public function testCreateNonClusteredPrimaryKeyInTable()
+    {
+        $table = new \Doctrine\DBAL\Schema\Table("tbl");
+        $table->addColumn("id", "integer");
+        $table->setPrimaryKey(Array("id"));
+        $table->getIndex('primary')->addFlag('nonclustered');
+
+        $this->assertEquals(array('CREATE TABLE tbl (id INT NOT NULL, PRIMARY KEY NONCLUSTERED (id))'), $this->_platform->getCreateTableSQL($table));
+    }
+
+    /**
+     * @group DBAL-220
+     */
+    public function testCreateNonClusteredPrimaryKey()
+    {
+        $idx = new \Doctrine\DBAL\Schema\Index('idx', array('id'), false, true);
+        $idx->addFlag('nonclustered');
+        $this->assertEquals('ALTER TABLE tbl ADD PRIMARY KEY NONCLUSTERED (id)', $this->_platform->getCreatePrimaryKeySQL($idx, 'tbl'));
     }
 }

@@ -6,7 +6,7 @@ use Doctrine\DBAL\Types\Type;
 use Doctrine\Tests\DBAL\Mocks;
 
 require_once __DIR__ . '/../../TestInit.php';
- 
+
 class TimeTest extends \Doctrine\Tests\DbalTestCase
 {
     protected
@@ -43,5 +43,11 @@ class TimeTest extends \Doctrine\Tests\DbalTestCase
     public function testNullConversion()
     {
         $this->assertNull($this->_type->convertToPHPValue(null, $this->_platform));
+    }
+
+    public function testConvertDateTimeToPHPValue()
+    {
+        $date = new \DateTime("now");
+        $this->assertSame($date, $this->_type->convertToPHPValue($date, $this->_platform));
     }
 }

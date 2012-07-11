@@ -2,8 +2,6 @@
 
 namespace Doctrine\Tests\DBAL\Schema;
 
-require_once __DIR__ . '/../../TestInit.php';
-
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Schema\TableBuilder;
@@ -12,7 +10,7 @@ use Doctrine\DBAL\Schema\Index;
 use Doctrine\DBAL\Schema\ForeignKeyConstraint;
 use Doctrine\DBAL\Types\Type;
 
-class TableTest extends \PHPUnit_Framework_TestCase
+class TableTest extends \Doctrine\Tests\DbalTestCase
 {
     public function testCreateWithInvalidTableName()
     {
@@ -111,7 +109,7 @@ class TableTest extends \PHPUnit_Framework_TestCase
         $type = \Doctrine\DBAL\Types\Type::getType('integer');
         $columns = array(new Column("foo", $type), new Column("bar", $type), new Column("baz", $type));
         $table = new Table("foo", $columns);
-        
+
         $table->addIndex(array("foo", "bar"), "foo_foo_bar_idx");
         $table->addUniqueIndex(array("bar", "baz"), "foo_bar_baz_uniq");
 
@@ -312,7 +310,7 @@ class TableTest extends \PHPUnit_Framework_TestCase
         $constraints = $table->getForeignKeys();
         $this->assertEquals(1, count($constraints));
         $constraint = current($constraints);
-        
+
         $this->assertInstanceOf('Doctrine\DBAL\Schema\ForeignKeyConstraint', $constraint);
 
         $this->assertTrue($constraint->hasOption("foo"));
@@ -339,7 +337,7 @@ class TableTest extends \PHPUnit_Framework_TestCase
         $this->assertFalse($column->getNotnull());
 
         $table->setPrimaryKey(array('id'));
-        
+
         $this->assertTrue($column->getNotnull());
     }
 
@@ -406,18 +404,18 @@ class TableTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(1, count($table->getIndexes()));
         $this->assertFalse($table->hasIndex($index->getName()));
     }
-    
+
     public function testPrimaryKeyOverrulesUniqueIndex()
     {
         $table = new Table("bar");
         $table->addColumn('baz', 'integer', array());
         $table->addUniqueIndex(array('baz'));
-        
+
         $table->setPrimaryKey(array('baz'));
-        
-        $indexes = $table->getIndexes();        
+
+        $indexes = $table->getIndexes();
         $this->assertEquals(1, count($indexes), "Table should only contain the primary key table index, not the unique one anymore, because it was overruled.");
-        
+
         $index = current($indexes);
         $this->assertTrue($index->isPrimary());
     }
@@ -472,5 +470,59 @@ class TableTest extends \PHPUnit_Framework_TestCase
         $table->addColumn('"foo"', 'integer');
         $table->addColumn('bar', 'integer');
         $table->addForeignKeyConstraint('"boing"', array('"foo"', '"bar"'), array("id"));
+    }
+
+    /**
+     * @group DBAL-177
+     */
+    public function testQuoteSchemaPrefixed()
+    {
+        $table = new Table("`test`.`test`");
+        $this->assertEquals("test.test", $table->getName());
+        $this->assertEquals("`test`.`test`", $table->getQuotedName(new \Doctrine\DBAL\Platforms\MySqlPlatform));
+    }
+
+    /**
+     * @group DBAL-204
+     */
+    public function testFullQualifiedTableName()
+    {
+        $table = new Table("`test`.`test`");
+        $this->assertEquals('test.test', $table->getFullQualifiedName("test"));
+        $this->assertEquals('test.test', $table->getFullQualifiedName("other"));
+
+        $table = new Table("test");
+        $this->assertEquals('test.test', $table->getFullQualifiedName("test"));
+        $this->assertEquals('other.test', $table->getFullQualifiedName("other"));
+    }
+
+    /**
+     * @group DBAL-224
+     */
+    public function testDropIndex()
+    {
+        $table = new Table("test");
+        $table->addColumn('id', 'integer');
+        $table->addIndex(array('id'), 'idx');
+
+        $this->assertTrue($table->hasIndex('idx'));
+
+        $table->dropIndex('idx');
+        $this->assertFalse($table->hasIndex('idx'));
+    }
+
+    /**
+     * @group DBAL-224
+     */
+    public function testDropPrimaryKey()
+    {
+        $table = new Table("test");
+        $table->addColumn('id', 'integer');
+        $table->setPrimaryKey(array('id'));
+
+        $this->assertTrue($table->hasPrimaryKey());
+
+        $table->dropPrimaryKey();
+        $this->assertFalse($table->hasPrimaryKey());
     }
 }
